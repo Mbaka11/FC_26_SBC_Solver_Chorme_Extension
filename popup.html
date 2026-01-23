@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FC26 SBC Solver</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 350px;
+        min-height: 400px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .header {
+        padding: 24px;
+        text-align: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .header p {
+        font-size: 14px;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 20px;
+      }
+
+      .stat-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        opacity: 0.8;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+      }
+
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: pulse-dot 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse-dot {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .status-text {
+        font-size: 14px;
+        flex: 1;
+      }
+
+      .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 14px 20px;
+        background: white;
+        color: #667eea;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        backdrop-filter: blur(10px);
+      }
+
+      .footer {
+        padding: 16px 20px;
+        text-align: center;
+        font-size: 12px;
+        opacity: 0.7;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .settings-section {
+        margin-top: 16px;
+      }
+
+      .setting-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .setting-item:last-child {
+        border-bottom: none;
+      }
+
+      .setting-label {
+        font-size: 14px;
+      }
+
+      .toggle {
+        position: relative;
+        width: 48px;
+        height: 24px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      .toggle.active {
+        background: #10b981;
+      }
+
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s;
+      }
+
+      .toggle.active::after {
+        transform: translateX(24px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>⚡ SBC Solver</h1>
+      <p>EA FC 26 Web App Extension</p>
+    </div>
+
+    <div class="content">
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span class="status-text">Extension Active</span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Cached Players</div>
+        <div class="stat-value" id="playerCount">0</div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn" id="openWebApp">Open EA FC Web App</button>
+        <button class="btn btn-secondary" id="clearCache">Clear Cache</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="setting-item">
+          <span class="setting-label">Debug Mode</span>
+          <div class="toggle" id="debugToggle"></div>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Auto Solve</span>
+          <div class="toggle" id="autoSolveToggle"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Version 1.0.0 • Made for FC26</div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
