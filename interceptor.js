@@ -13,13 +13,15 @@
   const originalXHROpen = XMLHttpRequest.prototype.open;
   const originalXHRSend = XMLHttpRequest.prototype.send;
 
-  // URLs we're interested in
+  // URLs we're interested in (EA FC specific endpoints)
   const PLAYER_URLS = [
+    "usermassinfo",
     "/ut/game/fc26/club",
     "/ut/game/fc26/clubsquads",
     "/ut/game/fc26/item",
+    "/club",
+    "/squad",
     "/transfermarket",
-    "/club/squad/all",
   ];
 
   /**
@@ -30,28 +32,55 @@
   }
 
   /**
-   * Extract player data from response
+   * Extract and sanitize player data from response
    */
   function extractPlayerData(data) {
     try {
+      let rawPlayers = null;
+
       // EA FC Web App typically returns player data in these structures
       if (Array.isArray(data)) {
-        return data;
+        rawPlayers = data;
+      } else if (data.itemData) {
+        rawPlayers = Array.isArray(data.itemData)
+          ? data.itemData
+          : [data.itemData];
+      } else if (data.items) {
+        rawPlayers = data.items;
+      } else if (data.players) {
+        rawPlayers = data.players;
       }
 
-      if (data.items) {
-        return data.items;
+      if (!rawPlayers || rawPlayers.length === 0) {
+        return null;
       }
 
-      if (data.itemData) {
-        return Array.isArray(data.itemData) ? data.itemData : [data.itemData];
-      }
+      // Sanitize player data - extract only what we need
+      const sanitizedPlayers = rawPlayers
+        .map((player) => {
+          return {
+            id: player.id || player.itemId || player.resourceId,
+            rating: player.rating || player.overallRating || 0,
+            position: player.position || player.preferredPosition || "Unknown",
+            playStyle: player.playStyle || player.playstyles || null,
+            untradeable:
+              player.untradeable === true || player.tradeable === false,
+            // Additional useful data
+            name: player.name || "",
+            nation: player.nation || player.nationality || null,
+            league: player.league || player.leagueId || null,
+            club: player.club || player.teamId || null,
+            rareType: player.rareflag || player.rareType || 0, // Used to identify card types
+          };
+        })
+        .filter((p) => p.id && p.rating > 0); // Filter out invalid entries
 
-      if (data.players) {
-        return data.players;
-      }
-
-      return null;
+      console.log(
+        "[FC26 SBC Solver] Sanitized",
+        sanitizedPlayers.length,
+        "players",
+      );
+      return sanitizedPlayers;
     } catch (error) {
       console.error("[FC26 SBC Solver] Error extracting player data:", error);
       return null;
@@ -62,6 +91,11 @@
    * Send player data to content script
    */
   function notifyContentScript(playerData) {
+    console.log(
+      "[FC26 SBC Solver] Sending player data to content script:",
+      playerData.length,
+      "players",
+    );
     window.postMessage(
       {
         type: "FC26_PLAYER_DATA",
@@ -79,17 +113,18 @@
     const response = await originalFetch.apply(this, args);
 
     try {
-      const url = args[0];
+      const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
 
-      if (typeof url === "string" && isPlayerDataURL(url)) {
+      if (isPlayerDataURL(url)) {
         console.log("[FC26 SBC Solver] Intercepted fetch to:", url);
 
         // Clone response to avoid consuming it
         const clonedResponse = response.clone();
         const data = await clonedResponse.json();
+        console.log("[FC26 SBC Solver] Response data:", data);
 
         const playerData = extractPlayerData(data);
-        if (playerData) {
+        if (playerData && playerData.length > 0) {
           console.log(
             "[FC26 SBC Solver] Found player data:",
             playerData.length,

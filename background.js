@@ -26,6 +26,13 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Handle LOG messages separately to avoid cluttering
+  if (request.type === "LOG") {
+    console.log(`[FC26 SBC Solver] ${request.timestamp}:`, request.message);
+    sendResponse({ success: true });
+    return true;
+  }
+
   console.log("[FC26 SBC Solver] Message received:", request);
 
   if (request.type === "SAVE_PLAYER_DATA") {
