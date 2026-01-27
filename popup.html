@@ -42,6 +42,46 @@
         padding: 20px;
       }
 
+      .info-section {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+
+      .info-section h2 {
+        font-size: 16px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .info-section p {
+        font-size: 14px;
+        line-height: 1.6;
+        opacity: 0.95;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        background: rgba(76, 175, 80, 0.3);
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 12px;
+      }
+
+      .footer {
+        padding: 16px 20px;
+        text-align: center;
+        font-size: 12px;
+        opacity: 0.8;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
       .stat-card {
         background: rgba(255, 255, 255, 0.15);
         backdrop-filter: blur(10px);
@@ -197,30 +237,26 @@
     </div>
 
     <div class="content">
-      <div class="status-indicator">
-        <div class="status-dot"></div>
-        <span class="status-text">Extension Active</span>
+      <div class="info-section">
+        <h2>🤖 How It Works</h2>
+        <p>1. Navigate to any SBC challenge on EA FC Web App</p>
+        <p>2. Click the "Solve SBC" button in the top-right corner</p>
+        <p>
+          3. Bot will automatically search and submit the lowest-rated players
+        </p>
+        <div class="status-badge">✅ Extension Active</div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-label">Cached Players</div>
-        <div class="stat-value" id="playerCount">0</div>
+      <div class="info-section">
+        <h2>⚙️ Features</h2>
+        <p>• Auto-detects SBC requirements</p>
+        <p>• Finds lowest-cost players</p>
+        <p>• Chemistry calculator (EA FC 26)</p>
+        <p>• Test mode (max 85 rated players)</p>
       </div>
 
       <div class="button-group">
         <button class="btn" id="openWebApp">Open EA FC Web App</button>
-        <button class="btn btn-secondary" id="clearCache">Clear Cache</button>
-      </div>
-
-      <div class="settings-section">
-        <div class="setting-item">
-          <span class="setting-label">Debug Mode</span>
-          <div class="toggle" id="debugToggle"></div>
-        </div>
-        <div class="setting-item">
-          <span class="setting-label">Auto Solve</span>
-          <div class="toggle" id="autoSolveToggle"></div>
-        </div>
       </div>
     </div>
 

@@ -5,10 +5,10 @@
 
 /* Main Solver Button */
 .sbc-solver-button {
-  position: fixed;
+  position: fixed !important; /* Force fixed positioning */
   top: 20px;
   right: 20px;
-  z-index: 999999;
+  z-index: 999999 !important; /* Ensure it's always on top */
 
   display: flex;
   align-items: center;
@@ -28,6 +28,10 @@
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
   transition: all 0.3s ease;
+
+  /* Prevent removal by EA's styles */
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .sbc-solver-button:hover {
