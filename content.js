@@ -14,11 +14,11 @@ const CONFIG = {
   requireConfirmation: true, // Require confirmation before submitting SBC
 };
 
-// State management
 let sbcSolverButton = null;
 let isInjected = false;
 let outputPanel = null;
 let currentRequirements = null; // Store current SBC requirements
+let stopRequested = false; // Flag to stop the solver
 
 /**
  * Utility: Log with timestamp (sends to background instead of console)
@@ -69,24 +69,52 @@ function getOutputPanel() {
   });
   document.body.appendChild(backdrop);
 
-  // Create new panel
+  // Create new panel with Apple-inspired structure
   outputPanel = document.createElement("div");
   outputPanel.className = "sbc-solver-output-panel";
   outputPanel.innerHTML = `
     <div class="sbc-output-header">
-      <span class="sbc-output-title">⚡ SBC Solver Output</span>
+      <span class="sbc-output-title">SBC Solver</span>
       <button class="sbc-output-close" id="sbc-close-output">×</button>
     </div>
-    <div class="sbc-output-body" id="sbc-output-content">
-      <div class="sbc-output-placeholder">Click 'Solve SBC' to see results...</div>
+    <div class="sbc-progress-container">
+      <div class="sbc-progress-bar">
+        <div class="sbc-progress-fill" id="sbc-progress-fill"></div>
+      </div>
+      <div class="sbc-progress-text" id="sbc-progress-text">Initializing...</div>
+    </div>
+    <div class="sbc-status-section" id="sbc-status-section">
+      <div class="sbc-status-text">
+        <div class="sbc-status-spinner"></div>
+        <span id="sbc-status-text">Processing...</span>
+      </div>
+    </div>
+    <div class="sbc-output-body">
+      <div class="sbc-logs-section" id="sbc-logs-section">
+        <div class="sbc-output-placeholder">Click 'Solve SBC' to begin...</div>
+      </div>
+      <div class="sbc-warnings-section" id="sbc-warnings-section">
+        <div class="sbc-warnings-header">⚠️ Warnings</div>
+        <div id="sbc-warnings-content"></div>
+      </div>
+      <div class="sbc-errors-section" id="sbc-errors-section">
+        <div class="sbc-errors-header">❌ Errors</div>
+        <div id="sbc-errors-content"></div>
+      </div>
     </div>
   `;
 
   document.body.appendChild(outputPanel);
-
-  // Add close button handler
-  document.getElementById("sbc-close-output").addEventListener("click", () => {
+  
+  // Clean up any old listener first (clone node trick or just re-add)
+  const closeBtn = document.getElementById("sbc-close-output");
+  const newCloseBtn = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+  
+  newCloseBtn.addEventListener("click", () => {
+    stopRequested = true; // Signal to stop
     hideOutputPanel();
+    console.log("[FC26 SBC Solver] ⛔ Stop requested by user.");
   });
 
   return outputPanel;
@@ -121,32 +149,202 @@ function hideOutputPanel() {
 }
 
 /**
- * Display output in the custom panel
+ * Update progress bar
  */
-function displayOutput(content) {
-  getOutputPanel();
-  const contentDiv = document.getElementById("sbc-output-content");
-
-  if (typeof content === "string") {
-    contentDiv.innerHTML += `<div class="sbc-output-line">${content}</div>`;
-  } else {
-    contentDiv.appendChild(content);
+function updateProgress(percentage, message) {
+  const progressFill = document.getElementById("sbc-progress-fill");
+  const progressText = document.getElementById("sbc-progress-text");
+  
+  if (progressFill) {
+    progressFill.style.width = `${percentage}%`;
   }
-
-  // Show panel with animation
-  showOutputPanel();
-
-  // Auto-scroll to bottom
-  contentDiv.scrollTop = contentDiv.scrollHeight;
+  if (progressText && message) {
+    progressText.textContent = message;
+  }
 }
 
 /**
- * Clear output panel
+ * Update status section
+ */
+function updateStatus(message, show = true) {
+  const statusSection = document.getElementById("sbc-status-section");
+  const statusText = document.getElementById("sbc-status-text");
+  
+  if (statusSection) {
+    if (show) {
+      statusSection.classList.add("active");
+    } else {
+      statusSection.classList.remove("active");
+    }
+  }
+  
+  if (statusText && message) {
+    statusText.textContent = message;
+  }
+}
+
+/**
+ * Add a log entry with progressive animation
+ */
+let logQueue = [];
+let isProcessingLogs = false;
+
+async function addLog(message, type = "info") {
+  logQueue.push({ message, type });
+  
+  if (!isProcessingLogs) {
+    await processLogQueue();
+  }
+}
+
+async function processLogQueue() {
+  if (logQueue.length === 0) {
+    isProcessingLogs = false;
+    return;
+  }
+  
+  isProcessingLogs = true;
+  const { message, type } = logQueue.shift();
+  
+  getOutputPanel();
+  const logsSection = document.getElementById("sbc-logs-section");
+  
+  if (logsSection) {
+    // Remove placeholder if it exists
+    const placeholder = logsSection.querySelector(".sbc-output-placeholder");
+    if (placeholder) {
+      placeholder.remove();
+    }
+    
+    const logItem = document.createElement("div");
+    logItem.className = `sbc-log-item ${type}`;
+    logItem.textContent = message;
+    
+    logsSection.appendChild(logItem);
+    
+    // Show panel with animation
+    showOutputPanel();
+    
+    // Auto-scroll to bottom
+    const outputBody = logsSection.closest(".sbc-output-body");
+    if (outputBody) {
+      outputBody.scrollTop = outputBody.scrollHeight;
+    }
+  }
+  
+  // Small delay before processing next log for progressive effect
+  await new Promise(resolve => setTimeout(resolve, 150));
+  
+  // Process next log
+  await processLogQueue();
+}
+
+/**
+ * Add a warning
+ */
+function addWarning(message) {
+  getOutputPanel();
+  const warningsSection = document.getElementById("sbc-warnings-section");
+  const warningsContent = document.getElementById("sbc-warnings-content");
+  
+  if (warningsSection && warningsContent) {
+    warningsSection.classList.add("active");
+    
+    const warningItem = document.createElement("div");
+    warningItem.className = "sbc-warning-item";
+    warningItem.textContent = message;
+    
+    warningsContent.appendChild(warningItem);
+    
+    showOutputPanel();
+  }
+}
+
+/**
+ * Add an error
+ */
+function addError(message) {
+  getOutputPanel();
+  const errorsSection = document.getElementById("sbc-errors-section");
+  const errorsContent = document.getElementById("sbc-errors-content");
+  
+  if (errorsSection && errorsContent) {
+    errorsSection.classList.add("active");
+    
+    const errorItem = document.createElement("div");
+    errorItem.className = "sbc-error-item";
+    errorItem.textContent = message;
+    
+    errorsContent.appendChild(errorItem);
+    
+    showOutputPanel();
+  }
+}
+
+/**
+ * Clear all output sections
  */
 function clearOutput() {
-  const contentDiv = document.getElementById("sbc-output-content");
-  if (contentDiv) {
-    contentDiv.innerHTML = "";
+  // Clear logs
+  const logsSection = document.getElementById("sbc-logs-section");
+  if (logsSection) {
+    logsSection.innerHTML = '<div class="sbc-output-placeholder">Processing...</div>';
+  }
+  
+  // Clear and hide warnings
+  const warningsSection = document.getElementById("sbc-warnings-section");
+  const warningsContent = document.getElementById("sbc-warnings-content");
+  if (warningsSection && warningsContent) {
+    warningsSection.classList.remove("active");
+    warningsContent.innerHTML = "";
+  }
+  
+  // Clear and hide errors
+  const errorsSection = document.getElementById("sbc-errors-section");
+  const errorsContent = document.getElementById("sbc-errors-content");
+  if (errorsSection && errorsContent) {
+    errorsSection.classList.remove("active");
+    errorsContent.innerHTML = "";
+  }
+  
+  // Reset progress
+  updateProgress(0, "Initializing...");
+  
+  // Hide status
+  updateStatus("", false);
+  
+  // Clear log queue
+  logQueue = [];
+  isProcessingLogs = false;
+}
+
+/**
+ * Legacy displayOutput function for backward compatibility
+ * Routes to new system based on content
+ */
+function displayOutput(content) {
+  // This is kept for backward compatibility but will be gradually replaced
+  if (typeof content === "string") {
+    // Try to determine type from content
+    if (content.includes("sbc-output-warning") || content.includes("⚠️")) {
+      const text = content.replace(/<[^>]*>/g, "").replace(/⚠️/g, "").trim();
+      addWarning(text);
+    } else if (content.includes("sbc-output-error") || content.includes("❌")) {
+      const text = content.replace(/<[^>]*>/g, "").replace(/❌/g, "").trim();
+      addError(text);
+    } else if (content.includes("sbc-output-success") || content.includes("✅")) {
+      const text = content.replace(/<[^>]*>/g, "").replace(/✅/g, "").trim();
+      addLog(text, "success");
+    } else if (content.includes("sbc-output-detail")) {
+      const text = content.replace(/<[^>]*>/g, "").trim();
+      addLog(text, "detail");
+    } else if (!content.includes("sbc-output-section-title") && !content.includes("sbc-output-divider")) {
+      // Regular info log
+      const text = content.replace(/<[^>]*>/g, "").replace(/🔍|📋|🚀|🤖|⚗️|📍/g, "").trim();
+      if (text) {
+        addLog(text, "info");
+      }
+    }
   }
 }
 
@@ -354,7 +552,7 @@ function getSBCRequirements() {
       // IMPORTANT: Look for "Exactly" keyword first, then check numbered requirements
       
       // Check for "Exactly Bronze/Silver/Gold" pattern FIRST
-      const exactlyBronzeMatch = text.match(/Exactly\\s+Bronze/i);
+      const exactlyBronzeMatch = text.match(/Exactly\s+Bronze/i);
       if (exactlyBronzeMatch && !text.includes('Pack') && !text.includes('Reward') && !requirements.minBronzePlayers) {
         requirements.minBronzePlayers = 1;
         console.log(
@@ -363,7 +561,7 @@ function getSBCRequirements() {
         );
       }
       
-      const exactlySilverMatch = text.match(/Exactly\\s+Silver/i);
+      const exactlySilverMatch = text.match(/Exactly\s+Silver/i);
       if (exactlySilverMatch && !text.includes('Pack') && !text.includes('Reward') && !requirements.minSilverPlayers) {
         requirements.minSilverPlayers = 1;
         console.log(
@@ -372,7 +570,7 @@ function getSBCRequirements() {
         );
       }
       
-      const exactlyGoldMatch = text.match(/Exactly\\s+Gold/i);
+      const exactlyGoldMatch = text.match(/Exactly\s+Gold/i);
       if (exactlyGoldMatch && !text.includes('Pack') && !text.includes('Reward') && !requirements.minGoldPlayers) {
         requirements.minGoldPlayers = 1;
         console.log(
@@ -386,8 +584,8 @@ function getSBCRequirements() {
       if (!text.includes('Pack') && !text.includes('Reward') && !text.includes('For You')) {
         if (!requirements.minSilverPlayers) {
           const silverMatch =
-            text.match(/Silver[:\\s]*(?:Minimum[:\\s]*)?(\\d+)\\s*Player/i) ||
-            text.match(/(\\d+)\\s*Silver/i);
+            text.match(/Silver[:\s]*(?:Minimum[:\s]*)?(\d+)\s*Player/i) ||
+            text.match(/(\d+)\s*Silver/i);
           if (silverMatch) {
             requirements.minSilverPlayers = parseInt(silverMatch[1]);
             console.log(
@@ -399,8 +597,8 @@ function getSBCRequirements() {
 
         if (!requirements.minGoldPlayers) {
           const goldMatch =
-            text.match(/Gold[:\\s]*(?:Minimum[:\\s]*)?(\\d+)\\s*Player/i) ||
-            text.match(/(\\d+)\\s*Gold/i);
+            text.match(/Gold[:\s]*(?:Minimum[:\s]*)?(\d+)\s*Player/i) ||
+            text.match(/(\d+)\s*Gold/i);
           if (goldMatch) {
             requirements.minGoldPlayers = parseInt(goldMatch[1]);
             console.log(
@@ -412,8 +610,8 @@ function getSBCRequirements() {
 
         if (!requirements.minBronzePlayers) {
           const bronzeMatch =
-            text.match(/Bronze[:\\s]*(?:Minimum[:\\s]*)?(\\d+)\\s*Player/i) ||
-            text.match(/(\\d+)\\s*Bronze/i);
+            text.match(/Bronze[:\s]*(?:Minimum[:\s]*)?(\d+)\s*Player/i) ||
+            text.match(/(\d+)\s*Bronze/i);
           if (bronzeMatch) {
             requirements.minBronzePlayers = parseInt(bronzeMatch[1]);
             console.log(
@@ -493,14 +691,37 @@ function getSBCRequirements() {
   }
 }
 
+// Global flag to stop automation - already declared at top
+// Placeholder for getOutputPanel close handler (assuming it exists elsewhere)
+// If you have a function like `getOutputPanel` that creates a UI element
+// with a close button, you would add an event listener there:
+/*
+function getOutputPanel() {
+  const panel = document.createElement('div');
+  // ... create panel content ...
+  const closeButton = panel.querySelector('.close-button'); // Or whatever your close button selector is
+  if (closeButton) {
+    closeButton.addEventListener('click', () => {
+      stopRequested = true;
+      console.log("[FC26 SBC Solver] Automation stop requested by user.");
+      // ... close panel logic ...
+    });
+  }
+  return panel;
+}
+*/
+
 /**
  * Automate player search and submission
  */
 async function automatePlayerSubmission(requirements) {
-  console.log(
-    "[FC26 SBC Solver] Starting automation with requirements:",
-    requirements,
-  );
+  console.log("[FC26 SBC Solver] Starting automation...");
+  
+  // Reset stop flag at start
+  stopRequested = false;
+  
+  const slots = document.querySelectorAll(".ut-squad-slot-view");
+  console.log(`[FC26 SBC Solver] Found ${slots.length} slots`);
 
   try {
     displayOutput(
@@ -528,6 +749,12 @@ async function automatePlayerSubmission(requirements) {
       i < Math.min(emptySlots.length, requirements.numberOfPlayers);
       i++
     ) {
+      if (stopRequested) {
+        console.log("[FC26 SBC Solver] 🛑 Automation stopped by user.");
+        displayOutput('<div class="sbc-output-error">⛔ Solver stopped by user.</div>');
+        return;
+      }
+
       const slot = emptySlots[i];
 
       displayOutput(
@@ -657,7 +884,7 @@ async function automatePlayerSubmission(requirements) {
         await humanDelay();
       }
       
-      // Strategy 3: Dispatch mouse events on the button
+      // Strategy 3: Dispatch mouse events
       console.log("[FC26 SBC Solver] Strategy 3: Dispatching mouse events");
       addPlayerBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
       addPlayerBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -697,11 +924,89 @@ async function automatePlayerSubmission(requirements) {
             '<div class="sbc-output-error">❌ Add Player button clicked but Club Search didn\'t open</div>',
           );
         } else {
+          // Check if stopped
+          if (stopRequested) {
+              console.log("[FC26 SBC Solver] 🛑 Automation stopped by user.");
+              displayOutput('<div class="sbc-output-error">⛔ Solver stopped by user.</div>');
+              return;
+          }
+
           displayOutput(
-            '<div class="sbc-output-error">❌ Failed to open Club Search for slot ' +
-              (i + 1) +
-              "</div>",
+            `<div class="sbc-output-detail">Processing slot ${i + 1}/${slots.length}...</div>`,
           );
+
+          // Click the slot
+          slot.click();
+          await humanDelay();
+          
+          if (stopRequested) return;
+
+          // Wait for player interactions panel (where "Add Player" is)
+          // The panel usually slides in or appears.
+          const panel = await waitForElement(".ut-squad-slot-panel-view"); // Adjust selector if needed
+
+          if (panel) {
+            console.log("[FC26 SBC Solver] Slot panel opened");
+            
+            if (stopRequested) return;
+
+            // Click "Add Player" or "Swap Player"
+            // Look for "Add Player" button
+            const addButtons = Array.from(
+              document.querySelectorAll("button, .btn-standard"),
+            ).filter((btn) => {
+              const text = btn.textContent.trim();
+              return (
+                (text === "Add Player" || text === "Swap Player") &&
+                btn.offsetParent !== null
+              );
+            });
+
+            if (addButtons.length > 0) {
+              addButtons[0].click();
+              await humanDelay();
+
+              if (stopRequested) return;
+
+              // Wait for search modal
+              const modal = await waitForSearchModal();
+              if (modal) {
+                console.log("[FC26 SBC Solver] Search modal opened");
+                
+                if (stopRequested) return;
+
+                // Apply filters
+                await applySearchFilters(requirements, modal);
+                
+                if (stopRequested) return;
+
+                // Click Search
+                const searchClicked = await clickSearchButton(modal);
+
+                if (searchClicked) {
+                  // Select first player
+                  if (stopRequested) return;
+                  
+                  const playerSelected = await selectFirstPlayer(modal);
+
+                  if (playerSelected) {
+                    displayOutput(
+                      '<div class="sbc-output-success">✅ Player added!</div>',
+                    );
+                  } else {
+                    displayOutput(
+                      '<div class="sbc-output-warning">⚠️ No player found matching criteria</div>',
+                    );
+                    // Go back/close to continue to next slot?
+                    // For now, simpler to just log it.
+                  }
+                }
+              }
+            }
+          }
+
+          // Small delay between slots
+          await humanDelay();
         }
         continue;
       }
@@ -765,6 +1070,14 @@ async function automatePlayerSubmission(requirements) {
     displayOutput(
       `<div class="sbc-output-error">❌ Error: ${error.message}</div>`,
     );
+  }
+  
+  if (!stopRequested) {
+      displayOutput('<div class="sbc-output-section-title">✨ COMPLETED</div>');
+      displayOutput(
+        '<div class="sbc-output-success">✅ Squad filling process finished!</div>',
+      );
+      showNotification("SBC Solver finished!", "success");
   }
 }
 
@@ -1043,32 +1356,41 @@ async function waitForSearchModal_OLD() {
 /**
  * Click the Search button in the Club Search panel to load players
  */
+/**
+ * Click the Search button in the Club Search panel to load players
+ */
 async function clickSearchButton(panel) {
   console.log(
     "[FC26 SBC Solver] Looking for Search button in Club Search panel...",
   );
 
-  // Look for Search button - could be <button>, div, or span with button classes
-  const searchButtons = Array.from(
-    document.querySelectorAll(
-      'button, div[role="button"], span[role="button"], .btn-standard, .call-to-action',
-    ),
-  ).filter((btn) => {
-    const text = btn.textContent.trim();
-    return text === "Search" && btn.offsetParent !== null;
-  });
+  // Strategy 1: Specific class selector based on user HTML
+  // <button class="btn-standard primary">Search</button>
+  let searchButton = panel ? panel.querySelector('.btn-standard.primary') : document.querySelector('.btn-standard.primary');
+  
+  // Strategy 2: Text content fallback
+  if (!searchButton) {
+      console.log("[FC26 SBC Solver] Specific class not found, trying text matching...");
+      // Look for Search button - could be <button>, div, or span with button classes
+      const searchButtons = Array.from(
+        document.querySelectorAll(
+          'button, div[role="button"], span[role="button"], .btn-standard, .call-to-action',
+        ),
+      ).filter((btn) => {
+        const text = btn.textContent.trim();
+        return text === "Search" && btn.offsetParent !== null;
+      });
+      searchButton = searchButtons[0];
+  }
 
-  console.log(
-    "[FC26 SBC Solver] Found",
-    searchButtons.length,
-    'element(s) with text "Search"',
-  );
-
-  if (searchButtons.length > 0) {
+  if (searchButton) {
     console.log("[FC26 SBC Solver] ✅ Found Search button");
-    console.log("[FC26 SBC Solver] Search button class:", searchButtons[0].className);
+    console.log("[FC26 SBC Solver] Search button class:", searchButton.className);
     console.log("[FC26 SBC Solver] Clicking Search button...");
-    searchButtons[0].click();
+    
+    // Use robust simulateClick instead of simple .click()
+    simulateClick(searchButton);
+    
     displayOutput('<div class="sbc-output-detail">Searching players...</div>');
     await humanDelay();
     await humanDelay(); // Extra wait for search results to load
@@ -1089,76 +1411,314 @@ async function clickSearchButton(panel) {
 }
 
 /**
+ * Utility: Simulate a full click sequence (mousedown, mouseup, click)
+ * This is often needed for React/Angular apps that listen to specific mouse events
+ */
+function simulateClick(element) {
+  if (!element) return;
+  
+  const events = ['mousedown', 'mouseup', 'click'];
+  events.forEach(eventType => {
+    const event = new MouseEvent(eventType, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      buttons: 1
+    });
+    element.dispatchEvent(event);
+  });
+}
+
+/**
  * Apply quality filter (Bronze/Silver/Gold) in Club Search
  */
-async function applyQualityFilter(quality) {
+async function applyQualityFilter(quality, context = document) {
   console.log(`[FC26 SBC Solver] Applying quality filter: ${quality}`);
   
-  // Step 1: Find the Quality filter button
-  const qualityFilterControl = Array.from(
-    document.querySelectorAll('.ut-search-filter-control')
+  // Step 1: Find the Quality filter control
+  // We look for the row that contains the "Quality" label
+  const qualityRow = Array.from(
+    context.querySelectorAll('.ut-search-filter-control--row')
   ).find(el => {
+    // Must be visible
+    if (el.offsetParent === null) return false;
+    
+    // Check label text
     const label = el.querySelector('.label');
     return label && label.textContent.trim() === 'Quality';
   });
   
-  if (!qualityFilterControl) {
-    console.log('[FC26 SBC Solver] ❌ Quality filter control not found');
+  if (!qualityRow) {
+    console.log('[FC26 SBC Solver] ❌ Quality filter row not found');
     displayOutput('<div class="sbc-output-warning">⚠️ Quality filter not found</div>');
     return false;
   }
   
-  console.log('[FC26 SBC Solver] ✅ Found Quality filter control');
+  console.log('[FC26 SBC Solver] ✅ Found Quality filter row:', qualityRow.className);
   
-  // Step 2: Click the button to open the dropdown
-  const filterButton = qualityFilterControl.querySelector('button.ut-search-filter-control--row-button');
+  // Step 2: Open the dropdown
+  // We need to try clicking the button first, then the row itself if that fails
+  const filterButton = qualityRow.querySelector('.ut-search-filter-control--row-button');
   
-  if (!filterButton) {
-    console.log('[FC26 SBC Solver] ❌ Quality filter button not found');
-    return false;
+  // Strategy 1: Simulate click on the button
+  if (filterButton) {
+     console.log('[FC26 SBC Solver] Strategy 1: Simulate click on button...');
+     simulateClick(filterButton);
+  } else {
+     console.log('[FC26 SBC Solver] ⚠️ Button not found, skipping Strategy 1');
   }
   
-  console.log('[FC26 SBC Solver] Clicking Quality filter button...');
-  filterButton.click();
   await humanDelay();
-  await humanDelay(); // Extra wait for dropdown to appear
   
-  // Step 3: Find and click the quality option (Bronze/Silver/Gold)
-  // Quality options are <li> elements with class "with-icon" in an inline list
-  const qualityText = quality.charAt(0).toUpperCase() + quality.slice(1); // Capitalize
+  // Check if opened
+  let isOpened = await checkForDropdownOptions();
   
-  console.log(`[FC26 SBC Solver] Looking for quality option: ${qualityText}`);
-  
-  // Look for <li> elements in the inline list
-  const qualityOption = Array.from(
-    document.querySelectorAll('li.with-icon')
-  ).find(el => {
-    const text = el.textContent.trim();
-    return el.offsetParent !== null && text === qualityText;
-  });
-  
-  if (!qualityOption) {
-    console.log(`[FC26 SBC Solver] ❌ Could not find ${qualityText} option in dropdown`);
-    
-    // Log all visible <li> options for debugging
-    const allOptions = Array.from(
-      document.querySelectorAll('li.with-icon')
-    )
-      .filter(el => el.offsetParent !== null)
-      .map(el => el.textContent.trim())
-      .slice(0, 10);
-    console.log('[FC26 SBC Solver] Visible quality options:', allOptions);
-    
-    displayOutput(`<div class="sbc-output-warning">⚠️ ${qualityText} option not found</div>`);
-    return false;
+  // Strategy 2: If not opened, click the row itself
+  if (!isOpened) {
+     console.log('[FC26 SBC Solver] Strategy 2: Simulate click on the row container...');
+     simulateClick(qualityRow);
+     await humanDelay();
+     isOpened = await checkForDropdownOptions();
   }
   
-  console.log(`[FC26 SBC Solver] ✅ Found ${qualityText} option, clicking...`);
-  qualityOption.click();
+  // Strategy 3: Real click() method as fallback
+  if (!isOpened && filterButton) {
+      console.log('[FC26 SBC Solver] Strategy 3: Native click() on button...');
+      filterButton.click();
+      await humanDelay();
+      isOpened = await checkForDropdownOptions();
+  }
+
+  if (!isOpened) {
+     console.log('[FC26 SBC Solver] ❌ Failed to open Quality dropdown after all attempts');
+     displayOutput('<div class="sbc-output-warning">⚠️ Could not open Quality filter</div>');
+     return false;
+  }
+  
+  // Step 3: Select the specific quality
+  const qualityText = quality.charAt(0).toUpperCase() + quality.slice(1);
+  console.log(`[FC26 SBC Solver] Dropdown open! Looking for "${qualityText}"...`);
+  
+  // Find the option in the list
+  // The 'after' HTML shows <li class="with-icon">Bronze</li>
+  const options = Array.from(document.querySelectorAll('li.with-icon'));
+  const targetOption = options.find(el => el.textContent.trim() === qualityText && el.offsetParent !== null);
+  
+  if (!targetOption) {
+      console.log(`[FC26 SBC Solver] ❌ Option "${qualityText}" not found in open dropdown`);
+      return false;
+  }
+  
+  console.log(`[FC26 SBC Solver] ✅ Found option, clicking...`);
+  simulateClick(targetOption);
   await humanDelay();
   
   console.log(`[FC26 SBC Solver] ✅ Quality filter applied: ${qualityText}`);
   return true;
+}
+
+/**
+ * Helper to check if dropdown options are visible
+ */
+async function checkForDropdownOptions() {
+    // We look for the inline-list or any li with-icon that is visible
+    for (let i = 0; i < 5; i++) {
+        const options = Array.from(document.querySelectorAll('li.with-icon'));
+        const visibleOptions = options.filter(el => el.offsetParent !== null);
+        
+        if (visibleOptions.length > 0) {
+            console.log(`[FC26 SBC Solver] ✅ Dropdown options detected: ${visibleOptions.length}`);
+            return true;
+        }
+        await new Promise(r => setTimeout(r, 200));
+    }
+    return false;
+}
+
+/**
+ * Apply rarity filter (Common/Rare) in Club Search
+ */
+async function applyRarityFilter(rarity, context = document) {
+  console.log(`[FC26 SBC Solver] Applying rarity filter: ${rarity}`);
+  
+  // Step 1: Find the Rarity filter control row
+  // Use same logic as Quality filter but look for "Rarity" label
+  const rarityRow = Array.from(
+    context.querySelectorAll('.ut-search-filter-control--row')
+  ).find(el => {
+    if (el.offsetParent === null) return false;
+    const label = el.querySelector('.label');
+    return label && label.textContent.trim() === 'Rarity';
+  });
+  
+  if (!rarityRow) {
+    console.log('[FC26 SBC Solver] ❌ Rarity filter row not found');
+    displayOutput('<div class="sbc-output-warning">⚠️ Rarity filter not found</div>');
+    return false;
+  }
+  
+  console.log('[FC26 SBC Solver] ✅ Found Rarity filter row:', rarityRow.className);
+  
+  // Step 2: Open the dropdown
+  const filterButton = rarityRow.querySelector('.ut-search-filter-control--row-button');
+  
+  // Strategy 1: Simulate click on the button
+  if (filterButton) {
+     simulateClick(filterButton);
+  }
+  
+  await humanDelay();
+  
+  // Check if opened
+  let isOpened = await checkForDropdownOptions();
+  
+  // Strategy 2: If not opened, click the row itself
+  if (!isOpened) {
+     simulateClick(rarityRow);
+     await humanDelay();
+     isOpened = await checkForDropdownOptions();
+  }
+  
+  // Strategy 3: Real click()
+  if (!isOpened && filterButton) {
+      filterButton.click();
+      await humanDelay();
+      isOpened = await checkForDropdownOptions();
+  }
+
+  if (!isOpened) {
+     console.log('[FC26 SBC Solver] ❌ Failed to open Rarity dropdown');
+     return false;
+  }
+  
+  // Step 3: Select the specific rarity
+  const rarityText = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+  console.log(`[FC26 SBC Solver] Dropdown open! Looking for "${rarityText}"...`);
+  
+  const options = Array.from(document.querySelectorAll('li.with-icon'));
+  const targetOption = options.find(el => el.textContent.trim() === rarityText && el.offsetParent !== null);
+  
+  if (!targetOption) {
+      console.log(`[FC26 SBC Solver] ❌ Option "${rarityText}" not found in open dropdown`);
+      return false;
+  }
+  
+  console.log(`[FC26 SBC Solver] ✅ Found option, clicking...`);
+  simulateClick(targetOption);
+  await humanDelay();
+  
+  console.log(`[FC26 SBC Solver] ✅ Rarity filter applied: ${rarityText}`);
+  return true;
+}
+
+/**
+ * Apply search filters based on requirements
+ */
+/**
+ * Apply Sort filter (e.g. Rating Low to High)
+ */
+async function applySortFilter(sortOrder, context = document) {
+    console.log(`[FC26 SBC Solver] Applying sort filter: ${sortOrder}`);
+    
+    // Step 1: Find the Sort filter control row
+    // Look for a row that contains "Sort" or has sorting-related text
+    const sortRow = Array.from(
+      context.querySelectorAll('.ut-search-filter-control--row, .inline-container, .ut-sort-control')
+    ).find(el => {
+      if (el.offsetParent === null) return false;
+      
+      // Check if this element or its label contains sort-related text
+      const label = el.querySelector('.label');
+      const text = (label ? label.textContent : el.textContent).toLowerCase();
+      
+      // Match common sort labels: "Rating High to Low", "Rating Low to High", etc.
+      return text.includes('rating') || text.includes('recent') || text.includes('sell');
+    });
+    
+    if (!sortRow) {
+      console.log('[FC26 SBC Solver] ❌ Sort filter row not found');
+      return false;
+    }
+    
+    console.log('[FC26 SBC Solver] ✅ Found Sort filter row:', sortRow.className);
+    
+    // Check if already set to desired sort
+    const currentLabel = sortRow.querySelector('.label');
+    if (currentLabel && currentLabel.textContent.trim() === sortOrder) {
+      console.log(`[FC26 SBC Solver] ✅ Already sorted by: ${sortOrder}`);
+      return true;
+    }
+    
+    // Step 2: Open the dropdown using multiple strategies
+    const filterButton = sortRow.querySelector('.ut-search-filter-control--row-button, button');
+    
+    console.log('[FC26 SBC Solver] Sort row classes:', sortRow.className);
+    console.log('[FC26 SBC Solver] Filter button found:', !!filterButton);
+    
+    // Strategy 1: Simulate click on the button or row
+    if (filterButton) {
+       console.log('[FC26 SBC Solver] Strategy 1: Simulate click on sort button...');
+       simulateClick(filterButton);
+    } else {
+       console.log('[FC26 SBC Solver] Strategy 1: Simulate click on sort row...');
+       simulateClick(sortRow);
+    }
+    
+    await humanDelay();
+    
+    // Check if opened
+    let isOpened = await checkForDropdownOptions();
+    
+    // Strategy 2: Try clicking any child elements that might trigger the dropdown
+    if (!isOpened) {
+       console.log('[FC26 SBC Solver] Strategy 2: Try clicking child elements...');
+       const clickableChildren = sortRow.querySelectorAll('span, div, button');
+       if (clickableChildren.length > 0) {
+           simulateClick(clickableChildren[0]);
+           await humanDelay();
+           isOpened = await checkForDropdownOptions();
+       }
+    }
+    
+    // Strategy 3: Native click on the row itself
+    if (!isOpened) {
+        console.log('[FC26 SBC Solver] Strategy 3: Native click() on sort row...');
+        sortRow.click();
+        await humanDelay();
+        isOpened = await checkForDropdownOptions();
+    }
+    
+    // Strategy 4: Try clicking with different mouse event coordinates
+    if (!isOpened && filterButton) {
+        console.log('[FC26 SBC Solver] Strategy 4: Native click() on button...');
+        filterButton.click();
+        await humanDelay();
+        isOpened = await checkForDropdownOptions();
+    }
+
+    if (!isOpened) {
+       console.log('[FC26 SBC Solver] ❌ Failed to open Sort dropdown after all attempts');
+       return false;
+    }
+    
+    // Step 3: Select the specific sort option
+    console.log(`[FC26 SBC Solver] Dropdown open! Looking for "${sortOrder}"...`);
+    
+    // Find the option in the list
+    const options = Array.from(document.querySelectorAll('li, li.with-icon'));
+    const targetOption = options.find(el => el.textContent.trim() === sortOrder && el.offsetParent !== null);
+    
+    if (!targetOption) {
+        console.log(`[FC26 SBC Solver] ❌ Option "${sortOrder}" not found in open dropdown`);
+        return false;
+    }
+    
+    console.log(`[FC26 SBC Solver] ✅ Found option, clicking...`);
+    simulateClick(targetOption);
+    await humanDelay();
+    
+    console.log(`[FC26 SBC Solver] ✅ Sort filter applied: ${sortOrder}`);
+    return true;
 }
 
 /**
@@ -1184,24 +1744,36 @@ async function applySearchFilters(requirements, modal) {
     }
     
     if (qualityFilter) {
-      await applyQualityFilter(qualityFilter);
+      await applyQualityFilter(qualityFilter, modal);
     }
   }
 
-  // Look for sort button inside modal or on page
-  const sortButton =
-    (modal ? modal.querySelector('[class*="sort"]') : null) ||
-    document.querySelector('[class*="sort"]');
-
-  if (sortButton) {
-    console.log("[FC26 SBC Solver] Found sort button, sorting by rating...");
-    // Click multiple times to cycle to rating ascending
-    for (let i = 0; i < 3; i++) {
-      sortButton.click();
-      await humanDelay();
-    }
+  // Apply Rarity filter:
+  // If "Rare" is explicitly required, select "Rare".
+  // If NOT explicitly required, select "Common" to save costs (as per user request).
+  const needsRare = requirements.minRarePlayers && requirements.minRarePlayers > 0;
+  
+  if (needsRare) {
+    displayOutput('<div class="sbc-output-detail">Filter: Rare players only</div>');
+    await applyRarityFilter('Rare', modal);
   } else {
-    console.log("[FC26 SBC Solver] No sort button found");
+    // Default to Common if Rare isn't forced
+    displayOutput('<div class="sbc-output-detail">Filter: Common players (Saves items)</div>');
+    await applyRarityFilter('Common', modal);
+  }
+
+  // Apply Sorting
+  // Default to "Rating Low to High" unless searching for high rated fodder
+  if (!requirements.minRating) {
+      // If we don't have a minimum rating requirement, we probably want cheapest/lowest rated functional players
+      displayOutput('<div class="sbc-output-detail">Sorting: Low to High</div>');
+      await applySortFilter('Rating Low to High', modal);
+  } else {
+      // If min rating IS required, maybe we still want Low to High to find the cheapest valid options?
+      // Or High to Low if we are looking for high rated?
+      // "Low to High" is generally safer for SBC solving to avoid using good cards.
+       displayOutput('<div class="sbc-output-detail">Sorting: Low to High</div>');
+       await applySortFilter('Rating Low to High', modal);
   }
 
   // Apply rating filter if specified
@@ -1209,6 +1781,7 @@ async function applySearchFilters(requirements, modal) {
     displayOutput(
       `<div class="sbc-output-detail">Filter: Min Rating ${requirements.minRating}</div>`,
     );
+     // Note: Actual min-rating input handling would go here if we identified the input field
   }
 
   // In test mode, filter by max rating
@@ -1271,42 +1844,115 @@ async function selectFirstPlayer(modal) {
     console.log("[FC26 SBC Solver] Container children:", modal.children.length);
 
     // Debug: log all visible elements with "item" or "player" in class
-    const debugElements = Array.from(
-      document.querySelectorAll('[class*="item"], [class*="player"]'),
-    )
-      .filter((el) => el.offsetParent !== null)
-      .map((el) => el.className)
-      .slice(0, 20);
-    console.log(
-      "[FC26 SBC Solver] Visible item/player elements:",
-      debugElements,
-    );
-
-    displayOutput(
-      '<div class="sbc-output-warning">⚠️ No players found in search results</div>',
-    );
-    return false;
+    // ... removed verbose debug logs ...
   }
+  
+  // Wait for loading skeletons to disappear
+  let validPlayerCard = null;
+  for (let i = 0; i < 6; i++) {
+    if (stopRequested) return false;
+
+    // Check if the FIRST card is still loading
+    const card = playerCards[0];
+    
+    // Look for the actual player card div inside the li
+    const playerDiv = card.querySelector('.small.player.item, .player-item, .ut-item-view');
+    
+    if (!playerDiv) {
+        console.log(`[FC26 SBC Solver] Loop ${i}: No player div found yet...`);
+        await humanDelay();
+        continue;
+    }
+    
+    // Improved loading check:
+    // 1. Check if it has 'ut-item-loaded' class (good)
+    // 2. Check if it has 'ut-item-loading' class (bad)
+    // 3. Check if it has 'empty' class (bad)
+    const isLoaded = playerDiv.classList.contains('ut-item-loaded');
+    const isLoading = playerDiv.classList.contains('ut-item-loading');
+    const isEmpty = playerDiv.classList.contains('empty');
+    
+    if (isLoaded && !isLoading && !isEmpty) {
+       validPlayerCard = card;
+       console.log(`[FC26 SBC Solver] ✅ Card loaded after ${i} attempts`);
+       break;
+    }
+    
+    // If we've waited 3+ attempts and div exists, proceed anyway (lazy loading)
+    if (i >= 3 && playerDiv) {
+        console.log(`[FC26 SBC Solver] ⚡ Proceeding after ${i} attempts (card may be lazy-loading)`);
+        validPlayerCard = card;
+        break;
+    }
+    
+    console.log(`[FC26 SBC Solver] Loop ${i}: Player card still loading (loaded:${isLoaded}, loading:${isLoading}, empty:${isEmpty})...`);
+    await humanDelay();
+  }
+  
+  if (!validPlayerCard) {
+      console.log("[FC26 SBC Solver] ⚠️ Player still loading after timeout, trying anyway...");
+      validPlayerCard = playerCards[0];
+  }
+  
+  if (stopRequested) return false;
 
   console.log(
     "[FC26 SBC Solver] Clicking first player:",
-    playerCards[0].className,
-  );
-  console.log(
-    "[FC26 SBC Solver] Player card parent:",
-    playerCards[0].parentElement?.className,
+    validPlayerCard.className,
   );
   
-  // Try to get player name from the card
-  const playerNameElement = playerCards[0].querySelector('.name');
-  const playerName = playerNameElement ? playerNameElement.textContent.trim() : 'Unknown';
+  // Try to get player name from the card - it's nested deep in the structure
+  // <div class="name untradeable">Øvretveit</div>
+  let nameElement = validPlayerCard.querySelector('.name');
+  let playerName = nameElement ? nameElement.textContent.trim() : null;
+  
+  // If not found, try looking in entityContainer or rowContent
+  if (!playerName || playerName === '---') {
+      const rowContent = validPlayerCard.querySelector('.rowContent, .entityContainer');
+      if (rowContent) {
+          nameElement = rowContent.querySelector('.name');
+          playerName = nameElement ? nameElement.textContent.trim() : 'Unknown';
+      }
+  }
+  
   console.log("[FC26 SBC Solver] Player name:", playerName);
+  displayOutput(`<div class="sbc-output-detail">Found: ${playerName}</div>`);
   
-  // Click the player card - this directly adds them to the squad
-  playerCards[0].click();
+  // Look for the "Add" button specifically
+  // Based on HTML structure: <li class="listFUTItem"><button class="ut-image-button-control btnAction add"></button>...
+  // The button should be a direct child of the <li>
+  let addButton = null;
+  
+  // Try multiple selector variations
+  // NOTE: The button may NOT have the 'add' class, just 'btnAction'
+  const buttonSelectors = [
+      '.btnAction',               // Just btnAction class (most common)
+      'button.btnAction',         // Explicit button tag
+      '.btnAction.add',           // Both classes (if present)
+      'button.add',               // Just the add class
+      '.ut-image-button-control', // Just the image button class
+      'button[class*="Action"]',  // Any button with "Action" in class
+  ];
+  
+  for (const selector of buttonSelectors) {
+      addButton = validPlayerCard.querySelector(selector);
+      if (addButton) {
+          console.log(`[FC26 SBC Solver] ✅ Found 'Add' button using selector: ${selector}`);
+          break;
+      }
+  }
+  
+  if (addButton) {
+      console.log("[FC26 SBC Solver] ✅ Clicking Add button directly...");
+      simulateClick(addButton);
+  } else {
+      console.log("[FC26 SBC Solver] ⚠️ 'Add' button not found with any selector");
+      console.log("[FC26 SBC Solver] validPlayerCard HTML:", validPlayerCard.outerHTML.substring(0, 500));
+      console.log("[FC26 SBC Solver] Falling back to clicking player card...");
+      simulateClick(validPlayerCard);
+  }
 
   console.log(`[FC26 SBC Solver] ✅ Player clicked: ${playerName} - waiting for player to be added to squad...`);
-  displayOutput(`<div class="sbc-output-detail">Adding ${playerName} to squad...</div>`);
   
   // Wait for the player to be added to the squad
   await humanDelay();
