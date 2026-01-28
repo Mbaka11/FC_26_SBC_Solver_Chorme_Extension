@@ -257,7 +257,7 @@
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: 16px 0 0 16px;
-  box-shadow: 
+  box-shadow:
     -2px 0 30px rgba(0, 0, 0, 0.08),
     -1px 0 10px rgba(0, 0, 0, 0.04);
 
@@ -521,6 +521,80 @@
   text-align: center;
   padding: 60px 24px;
   font-weight: 500;
+}
+
+/* Output message styles */
+.sbc-output-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  padding: 16px 24px 8px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 8px;
+}
+
+.sbc-output-section-title:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
+.sbc-output-requirement {
+  padding: 8px 24px;
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.6;
+}
+
+.sbc-output-requirement strong {
+  color: #007aff;
+  font-weight: 600;
+}
+
+.sbc-output-info {
+  padding: 8px 24px;
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.6;
+  background: rgba(0, 122, 255, 0.05);
+  border-left: 3px solid #007aff;
+  margin: 4px 0;
+}
+
+.sbc-output-success {
+  padding: 8px 24px;
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.6;
+  background: rgba(52, 199, 89, 0.05);
+  border-left: 3px solid #34c759;
+  margin: 4px 0;
+}
+
+.sbc-output-warning {
+  padding: 8px 24px;
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.6;
+  background: rgba(255, 204, 0, 0.05);
+  border-left: 3px solid #ffcc00;
+  margin: 4px 0;
+}
+
+.sbc-output-error {
+  padding: 8px 24px;
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.6;
+  background: rgba(255, 59, 48, 0.05);
+  border-left: 3px solid #ff3b30;
+  margin: 4px 0;
+}
+
+.sbc-output-detail {
+  padding: 6px 24px 6px 40px;
+  font-size: 12px;
+  color: #6e6e73;
+  line-height: 1.5;
 }
 
 /* Legacy classes for backward compatibility */
